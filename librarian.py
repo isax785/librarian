@@ -6,8 +6,8 @@ with open(JSON_FILEPATH, 'r') as f:
     SETTINGS = json.load(f)
 
 # add to json:
-# "sha"
-# "repo copy path"
+# - "sha"
+# - "repo copy path"
 
 class Librarian:
     def __init__(self):
@@ -23,6 +23,9 @@ class Librarian:
         pass
 
     def clone_repo(self):
+        pass
+
+    def copy_file(self):
         pass
 
     def update_repo(self):
