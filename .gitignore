@@ -1,0 +1,12 @@
+/activate
+/venvvfs/
+__pycache__/
+.vscode/
+venv/
+
+src/*.xlsx
+
+transfer/
+*content/
+remote/
+remote_client/
