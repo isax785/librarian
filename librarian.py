@@ -89,3 +89,6 @@ class Librarian:
             self.log.append(f"M - {f}")
 
         print("--> Completed!!")
+
+if __name__ == "__main__":
+    pass
