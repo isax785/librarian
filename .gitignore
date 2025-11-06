@@ -6,7 +6,5 @@ venv/
 
 src/*.xlsx
 
-transfer/
-*content/
-remote/
-remote_client/
+test_int_folder/
+test_ext_folder/
