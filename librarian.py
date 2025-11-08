@@ -138,4 +138,4 @@ if __name__ == "__main__":
                       ext_folder_skip=ext_folder_skip,
                       local_folder_skip=local_folder_skip,
                       local_file_skip=local_file_skip,
-                      update=False)
+                      update=True)
