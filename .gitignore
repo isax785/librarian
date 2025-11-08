@@ -5,6 +5,7 @@ __pycache__/
 venv/
 
 src/*.xlsx
+log.txt 
 
 # folders for testing
 test_int_folder/

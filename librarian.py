@@ -8,11 +8,12 @@ CWD = os.path.dirname(__file__)
 LOCAL_PATH = CWD   # Local absolute path
 
 class Librarian:
-    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, ext_folder_skip:list[str]=[], local_folder_skip:list[str]=[], ext_file_skip:list[str]=[], local_file_skip:list[str]=[]):
+    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, log:bool=False, ext_folder_skip:list[str]=[], local_folder_skip:list[str]=[], ext_file_skip:list[str]=[], local_file_skip:list[str]=[]):
         """
         - ext_path: str, default=None, external folder path, absolute or relative
         - local_path: str, default=None, internal folder path, absolute or relative
         - update: bool, default=False, directly updates the local folder content
+        - log: bool, default=False, save update log into a text file
         - ext_folder_skip: str, default=[], strings to skip external folders
         - ext_file_skip: str, default=[], strings to skip external files
         - local_folder_skip: str, default=[], strings to skip local folders
@@ -33,7 +34,7 @@ class Librarian:
         self.update_folder_content()
         self.compare_folders()
         if update:
-            self.update_local_folder(ext_folder_skip, ext_file_skip, local_folder_skip, local_file_skip)
+            self.update_local_folder(ext_folder_skip, ext_file_skip, local_folder_skip, local_file_skip, log=log)
 
     def update_folder_content(self):
         try:
@@ -86,7 +87,7 @@ class Librarian:
         " check if the path is to be skipped "
         return any([s in path.__str__() for s in skip])
 
-    def update_local_folder(self, ext_folder_skip:list[str]=[], local_folder_skip:list[str]=[], ext_file_skip:list[str]=[], local_file_skip:list[str]=[]):
+    def update_local_folder(self, ext_folder_skip:list[str]=[], local_folder_skip:list[str]=[], ext_file_skip:list[str]=[], local_file_skip:list[str]=[], log:bool=False):
         if not os.path.exists(self.local_path_abs):
             os.makedirs(self.local_path_abs, exist_ok=True)
             print(f"Local path created: {self.local_path_abs}")
@@ -124,6 +125,14 @@ class Librarian:
 
         print("--> Completed!!")
 
+        if log:
+            self.save_log()
+            print("Log saved!")
+
+    def save_log(self):
+        with open('./log.txt', "w") as logfile:
+            logfile.write('\n'.join(self.log))
+
 if __name__ == "__main__":
     EXT_FOLDER = "external/folder/here"
     LOCAL_FOLDER = "."
@@ -138,4 +147,5 @@ if __name__ == "__main__":
                       ext_folder_skip=ext_folder_skip,
                       local_folder_skip=local_folder_skip,
                       local_file_skip=local_file_skip,
-                      update=True)
+                      update=True,
+                      log=True)
