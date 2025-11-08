@@ -131,7 +131,7 @@ if __name__ == "__main__":
     ext_file_skip = []       # fill with strings for skip 
     local_folder_skip = []   # fill with strings for skip
     local_file_skip = []     # fill with strings for skip
-    local_file_skip = [] + os.path.basename(__file__)
+    local_file_skip = [] + [os.path.basename(__file__)]
     librarian = Librarian(ext_path=EXT_FOLDER, 
                       local_path=LOCAL_FOLDER,
                       ext_file_skip=ext_file_skip,
