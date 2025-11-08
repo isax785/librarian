@@ -6,5 +6,7 @@ venv/
 
 src/*.xlsx
 
+# folders for testing
 test_int_folder/
+test_local_folder/
 test_ext_folder/
