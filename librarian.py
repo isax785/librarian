@@ -92,36 +92,46 @@ class Librarian:
             os.makedirs(self.local_path_abs, exist_ok=True)
             print(f"Local path created: {self.local_path_abs}")
 
-        self.log = []
+        self.log_done = []
+        self.log_failed = []
         print("--- Adding Files ---")
         for f in self.added:
             if all([not self.check_skip(ext_folder_skip, f.parent),
                      not self.check_skip(ext_file_skip, f.name)]):
-                ext_file, local_file = self.ext_path / f, self.local_path / f
-                local_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(ext_file, local_file)
-                print(f"  {f}")
-                self.log.append(f"A - {f}")
+                try:
+                    ext_file, local_file = self.ext_path / f, self.local_path / f
+                    local_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(ext_file, local_file)
+                    print(f"  {f}")
+                    self.log_done.append(f"A - {f}")
+                except Exception as e:
+                    self.log_failed.append(f"A : {str(e)} - {f}")
 
         print("--- Deleting Files ---")
         for f in self.deleted:
             if all([not self.check_skip(local_folder_skip, f.parent.name),
                     not self.check_skip(local_file_skip, f.name)]):
-                local_file = self.local_path
-                if local_file.exists():
-                    local_file.unlink()
-                    print(f"  {f}")
-                    self.log.append(f"D - {f}")
+                try:
+                    local_file = self.local_path
+                    if f.exists():
+                        f.unlink()
+                        print(f"  {f}")
+                        self.log_done.append(f"D - {f}")
+                except Exception as e:
+                    self.log_failed.append(f"D : {str(e)} - {f}")
 
         print("--- Modifying Files ---")
         for f in self.modified:
             if all([not self.check_skip(local_folder_skip, f.parent.name),
                     not self.check_skip(local_file_skip, f.name)]):
-                ext_file, local_file = self.ext_path / f, self.local_path / f
-                local_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(ext_file, local_file)
-                print(f"  {f}")
-                self.log.append(f"M - {f}")
+                try:
+                    ext_file, local_file = self.ext_path / f, self.local_path / f
+                    local_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(ext_file, local_file)
+                    print(f"  {f}")
+                    self.log_done.append(f"M - {f}")
+                except Exception as e:
+                    self.log_failed.append(f"M : {str(e)} - {f}")
 
         print("--> Completed!!")
 
@@ -130,8 +140,10 @@ class Librarian:
             print("Log saved!")
 
     def save_log(self):
-        with open('./log.txt', "w") as logfile:
-            logfile.write('\n'.join(self.log))
+        with open('./log_done.txt', "w", encoding="utf-8") as logfile:
+            logfile.write('\n'.join(self.log_done))
+        with open('./log_failed.txt', "w", encoding="utf-8") as logfile:
+            logfile.write('\n'.join(self.log_failed))
 
 if __name__ == "__main__":
     EXT_FOLDER = "external/folder/here"
