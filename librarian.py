@@ -8,7 +8,7 @@ CWD = os.path.dirname(__file__)
 LOCAL_PATH = CWD   # Local absolute path
 
 class Librarian:
-    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, log:bool=False, ext_folder_skip:list[str]=[], local_folder_skip:list[str]=[], ext_file_skip:list[str]=[], local_file_skip:list[str]=[]):
+    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, log:bool=False, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[]):
         """
         - ext_path: str, default=None, external folder path, absolute or relative
         - local_path: str, default=None, internal folder path, absolute or relative
@@ -34,7 +34,10 @@ class Librarian:
         self.update_folder_content()
         self.compare_folders()
         if update:
-            self.update_local_folder(ext_folder_skip, ext_file_skip, local_folder_skip, local_file_skip, log=log)
+            self.update_local_folder(ext_folder_skip=ext_folder_skip,
+                                     ext_file_skip=ext_file_skip, local_folder_skip=local_folder_skip,
+                                     local_file_skip=local_file_skip, 
+                                     log=log)
 
     def update_folder_content(self):
         try:
@@ -87,7 +90,7 @@ class Librarian:
         " check if the path is to be skipped "
         return any([s in path.__str__() for s in skip])
 
-    def update_local_folder(self, ext_folder_skip:list[str]=[], local_folder_skip:list[str]=[], ext_file_skip:list[str]=[], local_file_skip:list[str]=[], log:bool=False):
+    def update_local_folder(self, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[], log:bool=False):
         if not os.path.exists(self.local_path_abs):
             os.makedirs(self.local_path_abs, exist_ok=True)
             print(f"Local path created: {self.local_path_abs}")
