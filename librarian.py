@@ -143,9 +143,9 @@ class Librarian:
             print("Log saved!")
 
     def save_log(self):
-        with open('./log_done.txt', "w", encoding="utf-8") as logfile:
+        with open(os.path.join(self.local_path, 'log_done.txt'), "w", encoding="utf-8") as logfile:
             logfile.write('\n'.join(self.log_done))
-        with open('./log_failed.txt', "w", encoding="utf-8") as logfile:
+        with open(os.path.join(self.local_path, 'log_failed.txt'), "w", encoding="utf-8") as logfile:
             logfile.write('\n'.join(self.log_failed))
 
 if __name__ == "__main__":
