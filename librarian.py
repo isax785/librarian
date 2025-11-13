@@ -127,9 +127,6 @@ class Librarian:
         for filter, negated in self.filters:
             if self.match_pattern(path, filter, base_dir):
                 ignored = not negated
-        if self.filtering:
-            # TODO: check!
-            ignored = not ignored
         return ignored
     
     def match_pattern(path, pattern, base_dir):
@@ -167,8 +164,10 @@ class Librarian:
 
         print("--- Adding Files ---")
         for f in self.added:
-            if all([not self.check_skip(ext_folder_skip, f.parent),
-                     not self.check_skip(ext_file_skip, f.name)]):
+            if self.is_ignored(f, self.ext_path):
+
+            # if all([not self.check_skip(ext_folder_skip, f.parent),
+            #          not self.check_skip(ext_file_skip, f.name)]):
                 try:
                     ext_file, local_file = self.ext_path / f, self.local_path / f
                     local_file.parent.mkdir(parents=True, exist_ok=True)
