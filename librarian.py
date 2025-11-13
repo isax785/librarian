@@ -2,22 +2,33 @@ import json
 import os
 from pathlib import Path
 import shutil
+import fnmatch
 
 CWD = os.path.dirname(__file__)
 
 LOCAL_PATH = CWD   # Local absolute path
+LIBIGNORE_FILEPATH = os.path.join(CWD, ".libignore")
+
+if not os.path.exists(LIBIGNORE_FILEPATH):
+    with open(LIBIGNORE_FILEPATH, 'w') as f:
+        f.write('')
 
 class Librarian:
-    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, log:bool=False, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[]):
+    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, log:bool=False, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[], libignore_filepath:str=LIBIGNORE_FILEPATH, filtering:bool=False):
         """
         - ext_path: str, default=None, external folder path, absolute or relative
         - local_path: str, default=None, internal folder path, absolute or relative
         - update: bool, default=False, directly updates the local folder content
         - log: bool, default=False, save update log into a text file
+
         - ext_folder_skip: str, default=[], strings to skip external folders
         - ext_file_skip: str, default=[], strings to skip external files
+
         - local_folder_skip: str, default=[], strings to skip local folders
         - local_file_skip: str, default=[], strings to skip local files
+
+        - libignore_filepath: str, default=LIBIGNORE_FILEPATH, the path of .libignore file
+        - filtering: bool, default=True, uses the .libignore as it is intended, i.e. by excluding files/folders. If False, .libignore files/folders that should be excluded, will be the only ones to be transferred.
         """
         if not ext_path:
             raise AttributeError("Provide an external folder path, varname ext_path!!")
@@ -29,14 +40,18 @@ class Librarian:
         self.local_path_abs = Path(self.local_path).resolve()
         if not os.path.exists(self.local_path_abs):
             os.makedirs(self.local_path_abs, exist_ok=True)
-            print(f"Local path created: {self.local_path_abs}")
+            print(f"Local path created: {self.local_path_abs}")    
+
+        self.filtering = filtering  
         
+        self.load_parse_libignore(libignore_filepath)
         self.update_folder_content()
         self.compare_folders()
         if update:
             self.update_local_folder(ext_folder_skip=ext_folder_skip,
                                      ext_file_skip=ext_file_skip, local_folder_skip=local_folder_skip,
                                      local_file_skip=local_file_skip, 
+                                     filtering=filtering,
                                      log=log)
 
     def update_folder_content(self):
@@ -85,18 +100,71 @@ class Librarian:
         except Exception as e:
             print(f"\n{str(e)}")
 
+    def load_parse_libignore(self, libignore_filepath=LIBIGNORE_FILEPATH):
+        self.filters = []
+        if not os.path.exists(libignore_filepath):
+            print(".libignore file not provided. No filters will be applied.")
+            return
+        
+        with open(libignore_filepath, 'r', encoding='utf-8') as f:
+            self.libignore = f.read()
+        for line in self.libignore:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            negated = line.startswith('!')
+            if negated:
+                line = line[1:]
+            self.filters.append((line, negated))
+
     @staticmethod
     def check_skip(skip, path):
         " check if the path is to be skipped "
         return any([s in path.__str__() for s in skip])
+    
+    def is_ignored(self, path:str, base_dir:str):
+        ignored = False
+        for filter, negated in self.filters:
+            if self.match_pattern(path, filter, base_dir):
+                ignored = not negated
+        if self.filtering:
+            # TODO: check!
+            ignored = not ignored
+        return ignored
+    
+    def match_pattern(path, pattern, base_dir):
+        " Match a path to a .gitignore-style pattern. "
+        # Normalize
+        path = path.replace(os.sep, '/')
+        base_dir = base_dir.replace(os.sep, '/')
+        pattern = pattern.replace(os.sep, '/')
 
-    def update_local_folder(self, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[], log:bool=False):
+        # If pattern starts with '/', it's relative to the base directory
+        if pattern.startswith('/'):
+            pattern = pattern[1:]
+            path_rel = os.path.relpath(path, base_dir).replace(os.sep, '/')
+        else:
+            path_rel = path
+
+        # Convert ** to */*/ and handle directory endings
+        if pattern.endswith('/'):
+            pattern = pattern.rstrip('/') + '/**'
+
+        # Convert gitignore wildcards to fnmatch wildcards
+        # Git ** matches across directories
+        pattern = pattern.replace('**', '*')
+
+        return fnmatch.fnmatch(path_rel, pattern)
+
+    def update_local_folder(self, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[], filtering:bool=None, log:bool=False):
+
+        self.filtering = filtering if filtering else self.filtering
         if not os.path.exists(self.local_path_abs):
             os.makedirs(self.local_path_abs, exist_ok=True)
             print(f"Local path created: {self.local_path_abs}")
 
-        self.log_done = []
-        self.log_failed = []
+        self.log_done, self.log_failed = [], []
+
         print("--- Adding Files ---")
         for f in self.added:
             if all([not self.check_skip(ext_folder_skip, f.parent),
@@ -143,9 +211,10 @@ class Librarian:
             print("Log saved!")
 
     def save_log(self):
-        with open(os.path.join(self.local_path, 'log_done.txt'), "w", encoding="utf-8") as logfile:
+        with open(os.path.join(self.local_path, 'log.txt'), "w", encoding="utf-8") as logfile:
+            logfile.write("--- TRANSFERS ---\n\n")
             logfile.write('\n'.join(self.log_done))
-        with open(os.path.join(self.local_path, 'log_failed.txt'), "w", encoding="utf-8") as logfile:
+            logfile.write("\n\n--- ERRORS ---\n\n")
             logfile.write('\n'.join(self.log_failed))
 
 if __name__ == "__main__":
