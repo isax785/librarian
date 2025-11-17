@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import shutil
 import fnmatch
+from tqdm import tqdm
 
 CWD = os.path.dirname(__file__)
 
@@ -14,19 +15,12 @@ if not os.path.exists(LIBIGNORE_FILEPATH):
         f.write('')
 
 class Librarian:
-    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, log:bool=False, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[], libignore_filepath:str=LIBIGNORE_FILEPATH, filtering:bool=False):
+    def __init__(self, ext_path:str=None, local_path:str=None, update:bool=False, log:bool=False,libignore_filepath:str=LIBIGNORE_FILEPATH, filtering:bool=False):
         """
         - ext_path: str, default=None, external folder path, absolute or relative
         - local_path: str, default=None, internal folder path, absolute or relative
         - update: bool, default=False, directly updates the local folder content
         - log: bool, default=False, save update log into a text file
-
-        - ext_folder_skip: str, default=[], strings to skip external folders
-        - ext_file_skip: str, default=[], strings to skip external files
-
-        - local_folder_skip: str, default=[], strings to skip local folders
-        - local_file_skip: str, default=[], strings to skip local files
-
         - libignore_filepath: str, default=LIBIGNORE_FILEPATH, the path of .libignore file
         - filtering: bool, default=True, uses the .libignore as it is intended, i.e. by excluding files/folders. If False, .libignore files/folders that should be excluded, will be the only ones to be transferred.
         """
@@ -48,10 +42,7 @@ class Librarian:
         self.update_folder_content()
         self.compare_folders()
         if update:
-            self.update_local_folder(ext_folder_skip=ext_folder_skip,
-                                     ext_file_skip=ext_file_skip, local_folder_skip=local_folder_skip,
-                                     local_file_skip=local_file_skip, 
-                                     filtering=filtering,
+            self.update_local_folder(filtering=filtering,
                                      log=log)
 
     def update_folder_content(self):
@@ -91,44 +82,43 @@ class Librarian:
             self.added = ext_files - local_files
             self.deleted = local_files - ext_files
 
-            for f in ext_files and local_files:
-                ext_size, ext_mtime = self.ext_file_info[f]
-                local_size, local_mtime = self.local_file_info[f]
-                if ext_size != local_size or abs(local_mtime - ext_mtime) > 1:
-                    self.modified.add(f)
+            for f in ext_files:
+                if f in local_files:
+                    ext_size, ext_mtime = self.ext_file_info[f]
+                    local_size, local_mtime = self.local_file_info[f]
+                    if ext_size != local_size or abs(local_mtime - ext_mtime) > 1:
+                        self.modified.add(f)
             print("done!")
         except Exception as e:
-            print(f"\n{str(e)}")
+            print(f"\n{f} comparison error: {str(e)}")
 
     def load_parse_libignore(self, libignore_filepath=LIBIGNORE_FILEPATH):
-        self.filters = []
         if not os.path.exists(libignore_filepath):
             print(".libignore file not provided. No filters will be applied.")
             return
         
         with open(libignore_filepath, 'r', encoding='utf-8') as f:
             self.libignore = f.read()
+        
+        self.negation_statements = []
+        self.filter_statements = []
+
         for line in self.libignore:
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            negated = line.startswith('!')
-            if negated:
-                line = line[1:]
-            self.filters.append((line, negated))
+        
+            if line.startswith('!'):
+                self.negation_statements.append(line[1:])
+            else:
+                self.filter_statements.append(line)
+   
+    def matches_any(self, path, base_dir, filters):
+        for filt in filters:
+            if self.match_pattern(path, filt, base_dir):
+                return True
+        return False
 
-    @staticmethod
-    def check_skip(skip, path):
-        " check if the path is to be skipped "
-        return any([s in path.__str__() for s in skip])
-    
-    def is_ignored(self, path:str, base_dir:str):
-        ignored = False
-        for filter, negated in self.filters:
-            if self.match_pattern(path, filter, base_dir):
-                ignored = not negated
-        return ignored
-    
     def match_pattern(path, pattern, base_dir):
         " Match a path to a .gitignore-style pattern. "
         # Normalize
@@ -153,7 +143,7 @@ class Librarian:
 
         return fnmatch.fnmatch(path_rel, pattern)
 
-    def update_local_folder(self, ext_folder_skip:list[str]=[],  ext_file_skip:list[str]=[], local_folder_skip:list[str]=[], local_file_skip:list[str]=[], filtering:bool=None, log:bool=False):
+    def update_local_folder(self, filtering:bool=None, log:bool=False):
 
         self.filtering = filtering if filtering else self.filtering
         if not os.path.exists(self.local_path_abs):
@@ -162,46 +152,52 @@ class Librarian:
 
         self.log_done, self.log_failed = [], []
 
-        print("--- Adding Files ---")
-        for f in self.added:
-            if self.is_ignored(f, self.ext_path):
+        # --- Copying Files ---
+        with tqdm(total=len(self.added), desc="Copy: ", ncols=50, unit="step", unit_scale=True) as pbar:
+            for f in self.added:
+                if not self.filtering ^ self.matches_any(f, self.ext_path, self.filter_statements):
+                # NOTE: '^' is the XOR operator
+                # True  ^ True   ->   False
+                # True  ^ False  ->   True
+                # False ^ True   ->   True
+                # False ^ False  ->   False
+                    try:
+                        ext_file, local_file = self.ext_path / f, self.local_path / f
+                        local_file.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(ext_file, local_file)
+                        # print(f"  {f}")
+                        self.log_done.append(f"A - {f}")
+                    except Exception as e:
+                        self.log_failed.append(f"A : {str(e)} - {f}")
+                pbar.update(1)
 
-            # if all([not self.check_skip(ext_folder_skip, f.parent),
-            #          not self.check_skip(ext_file_skip, f.name)]):
-                try:
-                    ext_file, local_file = self.ext_path / f, self.local_path / f
-                    local_file.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(ext_file, local_file)
-                    print(f"  {f}")
-                    self.log_done.append(f"A - {f}")
-                except Exception as e:
-                    self.log_failed.append(f"A : {str(e)} - {f}")
+        # --- Deleting FIles ---
+        with tqdm(total=len(self.added), desc="Delete: ", ncols=50, unit="step", unit_scale=True) as pbar:
+            for f in self.deleted:
+                if not self.matches_any(f, self.ext_path, self.negation_statements):
+                    try:
+                        local_file = self.local_path
+                        if f.exists():
+                            f.unlink()
+                            # print(f"  {f}")
+                            self.log_done.append(f"D - {f}")
+                    except Exception as e:
+                        self.log_failed.append(f"D : {str(e)} - {f}")
+                pbar.update(1)
 
-        print("--- Deleting Files ---")
-        for f in self.deleted:
-            if all([not self.check_skip(local_folder_skip, f.parent.name),
-                    not self.check_skip(local_file_skip, f.name)]):
-                try:
-                    local_file = self.local_path
-                    if f.exists():
-                        f.unlink()
-                        print(f"  {f}")
-                        self.log_done.append(f"D - {f}")
-                except Exception as e:
-                    self.log_failed.append(f"D : {str(e)} - {f}")
-
-        print("--- Modifying Files ---")
-        for f in self.modified:
-            if all([not self.check_skip(local_folder_skip, f.parent.name),
-                    not self.check_skip(local_file_skip, f.name)]):
-                try:
-                    ext_file, local_file = self.ext_path / f, self.local_path / f
-                    local_file.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(ext_file, local_file)
-                    print(f"  {f}")
-                    self.log_done.append(f"M - {f}")
-                except Exception as e:
-                    self.log_failed.append(f"M : {str(e)} - {f}")
+        # --- Modifying FIles ---
+        with tqdm(total=len(self.added), desc="Modify: ", ncols=50, unit="step", unit_scale=True) as pbar:
+            for f in self.modified:
+                if not self.matches_any(f, self.ext_path, self.negation_statements):
+                    try:
+                        ext_file, local_file = self.ext_path / f, self.local_path / f
+                        local_file.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(ext_file, local_file)
+                        # print(f"  {f}")
+                        self.log_done.append(f"M - {f}")
+                    except Exception as e:
+                        self.log_failed.append(f"M : {str(e)} - {f}")
+                    pbar.update(1)
 
         print("--> Completed!!")
 
@@ -216,7 +212,8 @@ class Librarian:
             logfile.write("\n\n--- ERRORS ---\n\n")
             logfile.write('\n'.join(self.log_failed))
 
-if __name__ == "__main__":
+if __name__ == "__main__":#
+
     EXT_FOLDER = "external/folder/here"
     LOCAL_FOLDER = "."
     ext_folder_skip = []     # fill with strings for skip

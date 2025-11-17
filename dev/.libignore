@@ -1,9 +1,6 @@
-# Ignore logs
+# Ignore files
 *.log
 *.txt
 
-# Ignore Python cache folders
-__pycache__/
-
-# Except important.log
+# Exceptions
 !important.log
