@@ -100,18 +100,19 @@ class Librarian:
         with open(libignore_filepath, 'r', encoding='utf-8') as f:
             self.libignore = f.read()
         
-        self.negation_statements = []
-        self.filter_statements = []
+        self.statements = []
+        self.skip_statements = []
 
         for line in self.libignore:
             line = line.strip()
+
             if not line or line.startswith('#'):
                 continue
         
             if line.startswith('!'):
-                self.negation_statements.append(line[1:])
+                self.skip_statements.append(line[1:])
             else:
-                self.filter_statements.append(line)
+                self.statements.append(line)
    
     def matches_any(self, path, base_dir, filters):
         for filt in filters:
@@ -119,7 +120,7 @@ class Librarian:
                 return True
         return False
 
-    def match_pattern(path, pattern, base_dir):
+    def match_pattern(self, path, pattern, base_dir):
         " Match a path to a .gitignore-style pattern. "
         # Normalize
         path = path.replace(os.sep, '/')
@@ -155,12 +156,13 @@ class Librarian:
         # --- Copying Files ---
         with tqdm(total=len(self.added), desc="Copy: ", ncols=50, unit="step", unit_scale=True) as pbar:
             for f in self.added:
-                if not self.filtering ^ self.matches_any(f, self.ext_path, self.filter_statements):
+                if self.filtering ^ self.matches_any(f, self.ext_path, self.statements):
                 # NOTE: '^' is the XOR operator
-                # True  ^ True   ->   False
-                # True  ^ False  ->   True
-                # False ^ True   ->   True
-                # False ^ False  ->   False
+                # Filtering |  Match   |   Copy
+                # True      ^  True   ->   False
+                # True      ^  False  ->   True
+                # False     ^  True   ->   True
+                # False     ^  False  ->   False
                     try:
                         ext_file, local_file = self.ext_path / f, self.local_path / f
                         local_file.parent.mkdir(parents=True, exist_ok=True)
@@ -174,7 +176,7 @@ class Librarian:
         # --- Deleting FIles ---
         with tqdm(total=len(self.added), desc="Delete: ", ncols=50, unit="step", unit_scale=True) as pbar:
             for f in self.deleted:
-                if not self.matches_any(f, self.ext_path, self.negation_statements):
+                if not self.matches_any(f, self.local_path, self.skip_statements):
                     try:
                         local_file = self.local_path
                         if f.exists():
@@ -188,7 +190,7 @@ class Librarian:
         # --- Modifying FIles ---
         with tqdm(total=len(self.added), desc="Modify: ", ncols=50, unit="step", unit_scale=True) as pbar:
             for f in self.modified:
-                if not self.matches_any(f, self.ext_path, self.negation_statements):
+                if not self.matches_any(f, self.ext_path, self.skip_statements):
                     try:
                         ext_file, local_file = self.ext_path / f, self.local_path / f
                         local_file.parent.mkdir(parents=True, exist_ok=True)
