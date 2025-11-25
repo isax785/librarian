@@ -98,13 +98,16 @@ class Librarian:
             return
         
         with open(libignore_filepath, 'r', encoding='utf-8') as f:
-            self.libignore = f.read()
+            libignore_raw = f.read()
+
+        self.libignore = [line for line in libignore_raw.split("\n") if len(line)>0]
+        
         
         self.statements = []
         self.skip_statements = []
 
         for line in self.libignore:
-            line = line.strip()
+            # line = line.strip()
 
             if not line or line.startswith('#'):
                 continue
@@ -116,7 +119,7 @@ class Librarian:
    
     def matches_any(self, path, base_dir, filters):
         for filt in filters:
-            if self.match_pattern(path, filt, base_dir):
+            if self.match_pattern(path.__str__(), filt, base_dir):
                 return True
         return False
 
@@ -146,7 +149,7 @@ class Librarian:
 
     def update_local_folder(self, filtering:bool=None, log:bool=False):
 
-        self.filtering = filtering if filtering else self.filtering
+        self.filtering = filtering if filtering is not None else self.filtering
         if not os.path.exists(self.local_path_abs):
             os.makedirs(self.local_path_abs, exist_ok=True)
             print(f"Local path created: {self.local_path_abs}")
@@ -167,7 +170,7 @@ class Librarian:
                         ext_file, local_file = self.ext_path / f, self.local_path / f
                         local_file.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(ext_file, local_file)
-                        # print(f"  {f}")
+                        print(f"  {f}")
                         self.log_done.append(f"A - {f}")
                     except Exception as e:
                         self.log_failed.append(f"A : {str(e)} - {f}")
@@ -201,11 +204,19 @@ class Librarian:
                         self.log_failed.append(f"M : {str(e)} - {f}")
                     pbar.update(1)
 
+        print("Cleaning empty folders ... ", end='')
+        self.clean_empty_folders() 
+        print("done!")
+
         print("--> Completed!!")
 
         if log:
             self.save_log()
             print("Log saved!")
+
+    def clean_empty_folders(self):
+        
+        pass
 
     def save_log(self):
         with open(os.path.join(self.local_path, 'log.txt'), "w", encoding="utf-8") as logfile:
